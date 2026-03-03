@@ -1,7 +1,13 @@
-# 📡 RSS Telegram Bot
+<div align="center">
+  <img src="./logo.png" alt="RSS Telegram Bot Logo" width="400">
+  <h1>📡 RSS Telegram Bot</h1>
+  <p>基于 Cloudflare Worker 的 Telegram RSS 订阅推送机器人，零服务器、零成本、零运维。</p>
 
-基于 Cloudflare Worker 的 Telegram RSS 订阅推送机器人，零服务器、零成本、零运维。
+  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+  [![Cloudflare Workers](https://img.shields.io/badge/Platform-Cloudflare_Workers-orange.svg)](https://workers.cloudflare.com/)
+</div>
 
+<br/>
 ## ✨ 功能
 
 - 📰 支持 RSS 2.0 / Atom 订阅源
