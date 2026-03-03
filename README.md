@@ -90,4 +90,4 @@ curl "https://你的域名/setup?password=你的管理密码"
 
 ## 📄 License
 
-MIT
+[MIT](LICENSE)
