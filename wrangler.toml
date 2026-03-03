@@ -1,0 +1,10 @@
+name = "rss-telegram-bot"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[kv_namespaces]]
+binding = "RSS_KV"
+id = "你的KV命名空间ID"
