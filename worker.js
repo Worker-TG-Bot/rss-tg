@@ -761,8 +761,12 @@ async function checkUserFeeds(env, userId) {
 async function sendFeedItem(env, chatId, sub, item) {
   const title = item.title || '无标题';
   const link = item.link || '';
-  const desc = item.description ? stripHtml(item.description) : '';
-  const truncDesc = desc ? truncate(desc, 300) : '';
+  // 先解码 HTML 实体，再去除 HTML 标签，再解码一次（处理双重编码）
+  const rawDesc = item.description || '';
+  const decoded = decodeEntities(rawDesc);
+  const stripped = stripHtml(decoded);
+  const cleanDesc = decodeEntities(stripped);
+  const truncDesc = cleanDesc ? truncate(cleanDesc, 300) : '';
 
   let text = `📢 <b>${escHtml(sub.title)}</b>\n\n`;
   text += `<b>${escHtml(title)}</b>\n`;
@@ -1057,6 +1061,7 @@ function decodeEntities(str) {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
     .replace(/&#39;/g, "'")
     .replace(/&#x27;/g, "'")
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
