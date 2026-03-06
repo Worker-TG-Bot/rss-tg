@@ -55,6 +55,8 @@ export default {
       try {
         const update = await request.json();
         ctx.waitUntil(processUpdate(update, env));
+        // 每次收到请求时顺便清理待删除队列
+        ctx.waitUntil(processPendingDeletes(env));
       } catch (e) {
         console.error('Webhook error:', e);
       }
@@ -66,6 +68,8 @@ export default {
 
   async scheduled(event, env, ctx) {
     ctx.waitUntil(checkAllFeeds(env));
+    // 每次 Cron 触发时也清理待删除队列
+    ctx.waitUntil(processPendingDeletes(env));
   }
 };
 
@@ -298,9 +302,11 @@ async function handleMessage(msg, env) {
   const text = (msg.text || '').trim();
   const msgId = msg.message_id;
 
+  // 删除用户消息（失败时自动进入待删除队列，后续请求/Cron 会补删）
+  await tryDelete(env, chatId, msgId);
+
   // /start 命令
   if (text === '/start') {
-    await tryDelete(env, chatId, msgId);
     await clearState(env, userId);
     await addUser(env, userId);
     await sendMainMenu(env, chatId, userId);
@@ -310,8 +316,6 @@ async function handleMessage(msg, env) {
   // 检查用户状态 (是否等待输入)
   const state = await getState(env, userId);
   if (state) {
-    await tryDelete(env, chatId, msgId);
-
     if (state.action === 'awaiting_add_url') {
       await processAddSub(env, chatId, userId, text);
     } else if (state.action === 'awaiting_edit_url') {
@@ -321,7 +325,6 @@ async function handleMessage(msg, env) {
   }
 
   // 无状态时收到文字，显示主菜单
-  await tryDelete(env, chatId, msgId);
   await sendMainMenu(env, chatId, userId);
 }
 
@@ -956,8 +959,70 @@ async function editMsg(env, chatId, msgId, text, replyMarkup) {
 
 async function tryDelete(env, chatId, msgId) {
   try {
-    await callTG(env, 'deleteMessage', { chat_id: chatId, message_id: msgId });
+    const result = await callTG(env, 'deleteMessage', { chat_id: chatId, message_id: msgId });
+    if (result && result.ok) return true;
+    // 消息已不存在，也算成功
+    if (result && result.description && result.description.includes('message to delete not found')) return true;
   } catch (e) { /* ignore */ }
+  // 删除失败，加入待删除队列，后续自动重试
+  await addPendingDelete(env, chatId, msgId);
+  return false;
+}
+
+// 将删除失败的消息加入 KV 待删除队列
+async function addPendingDelete(env, chatId, msgId) {
+  try {
+    const raw = await env.RSS_KV.get('pending_deletes');
+    const queue = raw ? JSON.parse(raw) : [];
+    // 避免重复
+    if (!queue.some(q => q.chatId === chatId && q.msgId === msgId)) {
+      queue.push({ chatId, msgId, addedAt: Date.now() });
+      // 最多保留 100 条，防止无限增长
+      const trimmed = queue.slice(-100);
+      await env.RSS_KV.put('pending_deletes', JSON.stringify(trimmed));
+    }
+  } catch (e) {
+    console.error('addPendingDelete error:', e);
+  }
+}
+
+// 处理待删除队列，逐条尝试删除
+async function processPendingDeletes(env) {
+  try {
+    const raw = await env.RSS_KV.get('pending_deletes');
+    if (!raw) return;
+    const queue = JSON.parse(raw);
+    if (queue.length === 0) return;
+
+    const remaining = [];
+    const maxAge = 48 * 60 * 60 * 1000; // 48 小时后放弃（Telegram 限制）
+
+    for (const item of queue) {
+      // 超过 48 小时的消息 Telegram 不允许删除，直接丢弃
+      if (Date.now() - item.addedAt > maxAge) continue;
+
+      try {
+        const result = await callTG(env, 'deleteMessage', {
+          chat_id: item.chatId,
+          message_id: item.msgId
+        });
+        if (result && result.ok) continue; // 删除成功
+        if (result && result.description && result.description.includes('message to delete not found')) continue; // 已不存在
+        // 仍然失败，保留在队列中
+        remaining.push(item);
+      } catch (e) {
+        remaining.push(item);
+      }
+    }
+
+    if (remaining.length > 0) {
+      await env.RSS_KV.put('pending_deletes', JSON.stringify(remaining));
+    } else {
+      await env.RSS_KV.delete('pending_deletes');
+    }
+  } catch (e) {
+    console.error('processPendingDeletes error:', e);
+  }
 }
 
 async function updateBotMsg(env, chatId, userId, text, kb) {
