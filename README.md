@@ -9,10 +9,12 @@
 
 <br/>
 ## ✨ 功能
-
 - 📰 支持 RSS 2.0 / Atom 订阅源
 - 🔔 每 5 分钟自动检查并推送新内容
-- 🎛️ Inline 按钮交互，轻松管理订阅
+- 🎛️ Inline 按钮交互，轻松管理订阅（添加 / 编辑 / 删除）
+- 🧹 用户消息自动清理，保持聊天窗口整洁
+- 🔄 消息删除失败自动入队，网络恢复后补删
+- 🔤 HTML 实体自动解码，推送内容干净可读
 - 🔐 Webhook Secret + 管理密码双重安全
 - ⚡ 基于 Cloudflare Worker，完全 Serverless
 
@@ -77,13 +79,18 @@ curl "https://你的域名/setup?password=你的管理密码"
 4. 发送 RSS 链接即可完成订阅
 5. 新内容会自动推送到聊天
 
+> 💡 Bot 始终只维护一条交互消息，用户发送的内容会自动删除，保持聊天整洁。
+
 ## 🔧 管理端点
+
+所有管理端点需要 `password` 参数验证。
 
 | 端点 | 说明 |
 |------|------|
-| `/setup?password=xxx` | 注册 Webhook 和 Bot 命令 |
-| `/remove?password=xxx` | 移除 Webhook |
-| `/cron?password=xxx` | 手动触发一次 RSS 检查 |
+| `GET /` | 项目说明页 |
+| `GET /setup?password=xxx` | 一键注册 Webhook + 设置 Bot 命令 |
+| `GET /remove?password=xxx` | 移除 Webhook |
+| `GET /cron?password=xxx` | 手动触发一次 RSS 检查 |
 
 ## 📝 环境变量
 
